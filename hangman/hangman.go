@@ -29,9 +29,11 @@ const (
 
 type Game struct {
 	word      string
+	printWord string
 	player    string
 	state     State
-	letters   []string
+	found     []string
+	failed    []string
 	errors    int
 	roundLock sync.Mutex
 }
@@ -58,6 +60,7 @@ func (g *Game) Init() bool {
 	}
 
 	g.word = getRandomWord()
+	g.GetUpdatedWord()
 	g.state = Playing
 
 	return true
@@ -79,26 +82,66 @@ func readChar() string {
 
 func (g *Game) Round() {
 	g.roundLock.Lock()
-	g.PrintWord()
-	c := readChar()
+	fmt.Printf("%s\n", g.printWord)
 
-	if !hasLetter(c, g.letters) {
-		g.letters = append(g.letters, c)
+	c := readChar()
+	alreadyUsedFailed := hasLetter(c, g.failed)
+	alreadyUsedFound := hasLetter(c, g.found)
+	found := g.wordHasLetter(c)
+
+	if !alreadyUsedFailed && !found {
+		g.failed = append(g.failed, c)
+	} else if !alreadyUsedFound {
+		g.found = append(g.found, c)
 	}
 
-	fmt.Printf("You entered: %v\n", g.letters)
+	if found {
+		g.GetUpdatedWord()
+	}
+
+	fmt.Printf("Used: %v\n", g.failed)
+
+	g.CheckGameOver(c)
 	g.roundLock.Unlock()
 }
 
-func (g *Game) PrintWord() {
-	for _, c := range g.word {
-		letter := string(c)
-		if hasLetter(letter, g.letters) {
-			fmt.Print(letter)
-		} else {
-			fmt.Print("_")
+func (g *Game) wordHasLetter(c string) bool {
+
+	for _, wc := range g.word {
+		letter := string(wc)
+		if c == letter {
+			return true
 		}
 	}
+
+	return false
+}
+
+func (g *Game) CheckGameOver(c string) {
+	var remaining int
+
+	remaining = 9 - len(g.failed)
+
+	if remaining <= 0 {
+		g.state = Lost
+	} else {
+		fmt.Printf("You have %d remaining attempts\n", remaining)
+	}
+}
+
+func (g *Game) GetUpdatedWord() {
+	newWord := make([]string, len(g.word))
+
+	for index, c := range g.word {
+		letter := string(c)
+
+		if hasLetter(letter, g.found) {
+			newWord[index] = letter
+		} else {
+			newWord[index] = "_"
+		}
+	}
+	g.printWord = strings.Join(newWord, "")
 }
 
 func hasLetter(letter string, letters []string) bool {
